@@ -1,40 +1,73 @@
-/*
- * Now find a thread we can wake up to take the signal off the queue.
- *
- * If the main thread wants the signal, it gets first crack.
- * Probably the least surprising to the average bear.
- */
-if (wants_signal(sig, p))
-        t = p;
-else if (!group || thread_group_empty(p))
-        /*
-         * There is just one thread and it does not need to be woken.
-         * It will dequeue unblocked signals before it runs again.
-         */
-        return;
-else {
-        /*
-         * Otherwise try to find a suitable thread.
-         */
-        t = signal->curr_target;
-        while (!wants_signal(sig, t)) {
-                t = next_thread(t);
-                if (t == signal->curr_target)
-                        /*
-                         * No thread needs to be woken.
-                         * Any eligible threads will see
-                         * the signal in the queue soon.
-                         */
-                        return;
-        }
-        signal->curr_target = t;
-}
+/*Basic POSIX Thread (pthread) Usage 2.
+   *
+   * By walking through this example you’ll learn:
+   * - How to pass value to thread when create it.
+   * - How to handles multiple threads.
+   * - What happens to variables that reside in various scopes.
+   *
+   */
+  
+   #include <stdio.h>
+   #include <unistd.h>
+   #include <pthread.h>
+   #include <sys/wait.h>
+  
+   #define NUM_THREADS 3
+  
+   static int global;
+  
+   //method to print address of different kind of variable
+   void print_addr(void* g, void* m, void* t, void* ts){
+   printf("%p\t%p\t%p\t%p\n", g, m, t, ts);
+   }
+  
+   //routine that is to be executed by each thread
+   void* worker(void* arg){
+   int thread;
+   static int thread_static;
+  
+   print_addr(&global, arg, &thread, &thread_static);
+  
+   pthread_exit(NULL);
+   }
+  
+   int main(int argc, char* argv[]){
+   static int main_static;
+  
+   pthread_t tids[NUM_THREADS];   //declaring thread discriptors
+   int status;
+  
+   printf("global\t\tmain\t\tthread\t\tthread-static\n");
+   print_addr(&global, &main, 0, 0);
+   for(int i = 0; i < NUM_THREADS; i++){
+   // HINT: The thread that runs `worker` should be created.
+   // HINT: The address of variable `main_static` should be passed
+   // when thread created.
+   // HINT: Each thread descriptor should be stored appropriately.
 
-/*
- * Found a killable thread.  If the signal will be fatal,
- * then start taking the whole group down immediately.
- */
-if (sig_fatal(p, sig) &&
-    !(signal->flags & SIGNAL_GROUP_EXIT) &&
-    !sigismember(&t->real_blocked, sig) &&
-    (sig == SIGKILL || !p->ptrace)) {
+   /*pthread_create method is used to create thread. There are 4 arguments of pthread_create.
+   1st argument = thread discriptor
+   2nd argument = thread arguments IF NULL is passed default thread arguments are used
+   3rd argument = routine that is to be executed by thread
+   4th argument = parameter to be passed to thread routine
+   pthread_create return pid of the thread
+   */
+   status = pthread_create(&tids[i],NULL,worker,&main_static);
+  
+   if(status != 0){
+   printf("WTF?");
+   return -1;
+   }
+   }
+  
+   // HINT: The main thread should not be exited until all `worker`s have finished.
+   /*
+   main method can wait for the thread by using pthread_join method. The thread for which main method has to wait, is passed
+   in the argument of the pthread_join
+   */  
+   for(int j=0;j<NUM_THREADS;j++){
+   pthread_join(tids[j],NULL);
+   }
+  
+   return 0;
+   }
